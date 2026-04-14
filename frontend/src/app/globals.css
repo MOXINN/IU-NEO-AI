@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwind-scrollbar";
+
+@theme {
+  --color-iu-bg-base: #0f172a;
+  --color-iu-bg-glass: rgba(30, 41, 59, 0.7);
+  --color-iu-bg-glass-hover: rgba(30, 41, 59, 0.9);
+  
+  --color-iu-accent: #6366f1;
+  --color-iu-accent-glow: rgba(99, 102, 241, 0.5);
+  
+  --color-iu-text-main: #f8fafc;
+  --color-iu-text-muted: #94a3b8;
+  
+  --color-iu-border: rgba(255, 255, 255, 0.08);
+
+  --animate-gradient-x: gradient-x 15s ease infinite;
+}
+
+@layer utilities {
+  .glass-panel {
+    background: var(--color-iu-bg-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--color-iu-border);
+  }
+}
+
+@keyframes gradient-x {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+body {
+  background-color: var(--color-iu-bg-base);
+  color: var(--color-iu-text-main);
+  /* Smooth, dark gradient background */
+  background: radial-gradient(circle at top left, rgba(30, 41, 59, 1) 0%, rgba(15, 23, 42, 1) 100%);
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+/* Custom scrollbar for webkit */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-iu-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

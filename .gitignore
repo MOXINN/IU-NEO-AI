@@ -1,0 +1,33 @@
+# IU NWEO AI
+
+# Secrets
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Node.js
+node_modules/
+.next/
+out/
+
+# Docker volumes (shouldn't be in repo but just in case)
+postgres_data/
+neo4j_data/
+chroma_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
