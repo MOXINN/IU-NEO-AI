@@ -1,16 +1,18 @@
 "use client";
 
 import React, { useState, useRef, KeyboardEvent } from "react";
-import { Send, Settings, Square } from "lucide-react";
+import { Send, Settings, Square, Trash2 } from "lucide-react";
 import { useChatStore } from "@/store/chatStore";
 import { streamChat } from "@/lib/api";
+import { generateId } from "@/lib/utils";
 
 export function ChatInput() {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  
-  const { addMessage, isStreaming, activeThreadId, setStreaming } = useChatStore();
+
+  const { addMessage, isStreaming, activeThreadId, setStreaming, clearChat, messages } =
+    useChatStore();
 
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return;
@@ -20,7 +22,7 @@ export function ChatInput() {
 
     // Push local message immediately
     addMessage({
-      id: Math.random().toString(36).substring(7),
+      id: generateId(),
       role: "user",
       content: userMessage,
       timestamp: Date.now(),
@@ -47,11 +49,14 @@ export function ChatInput() {
   return (
     <div className="p-4 mx-auto max-w-4xl w-full">
       <div className="glass-panel relative flex items-end p-2 sm:p-3 rounded-3xl group transition-all duration-300 focus-within:ring-2 focus-within:ring-indigo-500/50">
+        {/* Clear Chat Button */}
         <button
-          className="p-2 sm:p-3 text-slate-400 hover:text-indigo-400 transition-colors"
-          title="Settings (Coming later)"
+          onClick={clearChat}
+          disabled={messages.length === 0 || isStreaming}
+          className="p-2 sm:p-3 text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-30 disabled:hover:text-slate-400"
+          title="Clear chat"
         >
-          <Settings size={20} />
+          <Trash2 size={18} />
         </button>
 
         <textarea
@@ -82,7 +87,8 @@ export function ChatInput() {
         )}
       </div>
       <div className="text-center mt-3 text-[11px] text-slate-500">
-        AI responses may not be fully accurate. Please verify administrative details.
+        AI responses may not be fully accurate. Please verify administrative
+        details.
       </div>
     </div>
   );

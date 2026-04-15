@@ -1,14 +1,21 @@
 """
 IU NWEO AI — Semantic Router integration
 Maintainer: Architect
+
+Uses FastEmbed (ONNX) for sub-millisecond intent matching.
+Provides instant canned responses for known fast-path queries,
+bypassing the full LangGraph pipeline entirely.
+
+The router initialization downloads a small ONNX model on first run.
+All failures are caught gracefully — if the router breaks, queries
+simply fall through to the full LangGraph pipeline.
 """
 
-from semantic_router import Route
-from semantic_router.layer import RouteLayer
-from semantic_router.encoders import HuggingFaceEncoder
 import logging
+from semantic_router import Route, SemanticRouter
+from semantic_router.encoders import FastEmbedEncoder
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("iu-nweo.routing")
 
 # Define routes for instant matching
 greeting = Route(
@@ -18,36 +25,66 @@ greeting = Route(
 
 faq_admission = Route(
     name="faq_admission",
-    utterances=["how to apply", "when do admissions start", "admission process", "how to get into university"]
+    utterances=[
+        "how to apply", "when do admissions start",
+        "admission process", "how to get into university"
+    ]
 )
 
-# Shared layer
-_route_layer = None
+# Shared router instance
+_router = None
+_init_failed = False
 
-def get_route_layer() -> RouteLayer:
-    """Initializes and returns the semantic routing layer."""
-    global _route_layer
-    if _route_layer is None:
-        logger.info("Initializing HuggingFace encoder for Semantic Router...")
-        # Using a fast local encoder so we don't need OpenAI tokens for basic intents
-        encoder = HuggingFaceEncoder(name="all-MiniLM-L6-v2")
-        _route_layer = RouteLayer(encoder=encoder, routes=[greeting, faq_admission])
-        logger.info("Semantic Router ready.")
-    
-    return _route_layer
 
-def check_fast_route(query: str):
+def get_route_layer() -> SemanticRouter | None:
+    """
+    Initializes and returns the semantic router.
+    Returns None if initialization has previously failed to avoid repeated errors.
+    """
+    global _router, _init_failed
+
+    if _init_failed:
+        return None
+
+    if _router is None:
+        try:
+            logger.info("Initializing FastEmbed encoder for Semantic Router...")
+            encoder = FastEmbedEncoder()
+            _router = SemanticRouter(encoder=encoder, routes=[greeting, faq_admission])
+            logger.info("Semantic Router ready.")
+        except Exception as e:
+            logger.error(f"Semantic Router initialization failed: {e}")
+            _init_failed = True
+            return None
+
+    return _router
+
+
+def check_fast_route(query: str) -> str | None:
     """
     Evaluates the query against Semantic Router.
-    Returns Route object if matched, otherwise None.
+    Returns route name if matched, otherwise None.
+    Returns None on any error (non-blocking).
     """
-    layer = get_route_layer()
-    route_choice = layer(query)
-    
-    return route_choice.name if route_choice.name else None
+    try:
+        router = get_route_layer()
+        if router is None:
+            return None
+        route_choice = router(query)
+        return route_choice.name if route_choice.name else None
+    except Exception as e:
+        logger.warning(f"Semantic Router query failed: {e}")
+        return None
+
 
 # Pre-computed Canned Responses for fast paths
 CANNED_RESPONSES = {
-    "greeting": "Hello! I am the Integral University Agentic AI. How can I help you today? Ask me about courses, fees, or prerequisites.",
-    "faq_admission": "Admissions typically begin in May. You can apply directly through the Integral University official admissions website."
+    "greeting": (
+        "Hello! I am the Integral University Agentic AI. "
+        "How can I help you today? Ask me about courses, fees, or prerequisites."
+    ),
+    "faq_admission": (
+        "Admissions typically begin in May. You can apply directly through "
+        "the Integral University official admissions website."
+    ),
 }

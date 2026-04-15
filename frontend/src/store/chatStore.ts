@@ -1,13 +1,10 @@
 import { create } from "zustand";
+import type { Message } from "@/types";
+import { generateId } from "@/lib/utils";
 
-export type Role = "user" | "assistant";
-
-export interface Message {
-  id: string;
-  role: Role;
-  content: string;
-  timestamp: number;
-}
+// Re-export types for backward compatibility
+export type { Message } from "@/types";
+export type { Role } from "@/types";
 
 interface ChatState {
   messages: Message[];
@@ -20,8 +17,6 @@ interface ChatState {
   setStatusMessage: (msg: string | null) => void;
   clearChat: () => void;
 }
-
-const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
@@ -47,7 +42,7 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   setStreaming: (isStreaming) => set({ isStreaming }),
-  
+
   setStatusMessage: (statusMessage) => set({ statusMessage }),
 
   clearChat: () =>
