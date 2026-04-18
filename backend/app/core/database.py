@@ -20,6 +20,10 @@ async def init_db_pool() -> AsyncConnectionPool:
     """
     Initialize the async connection pool.
     Called once during FastAPI lifespan startup.
+
+    Key: reconnect_timeout limits internal retry duration so that
+    pool.open() will raise PoolTimeout instead of retrying forever
+    when PostgreSQL is unreachable.
     """
     global _pool
     logger.info("Initializing PostgreSQL connection pool...")
@@ -27,9 +31,11 @@ async def init_db_pool() -> AsyncConnectionPool:
         conninfo=settings.DATABASE_URL,
         min_size=2,
         max_size=10,
-        open=False,  # We open explicitly below
+        open=False,           # We open explicitly below
+        timeout=5.0,          # Max seconds to acquire a connection
+        reconnect_timeout=5,  # Stop internal retries after 5 seconds
     )
-    await _pool.open()
+    await _pool.open(wait=True, timeout=10.0)  # Hard cap — raises after 10s
     # Verify connectivity
     async with _pool.connection() as conn:
         await conn.execute("SELECT 1")

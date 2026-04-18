@@ -3,8 +3,14 @@ IU NWEO AI — Neo4j Graph Store Integration
 Maintainer: Architect
 """
 
-from langchain_community.graphs import Neo4jGraph
+# ---------------------------------------------------------------------------
+# P1 FIX: Corrected import path
+# Old: from langchain_neo4j import Neo4jGraph  (deprecated)
+# New: from langchain_neo4j import Neo4jGraph  (matches requirements.txt)
+# ---------------------------------------------------------------------------
+from langchain_neo4j import Neo4jGraph
 from app.core.config import settings
+import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +29,7 @@ def get_graph_store() -> Neo4jGraph:
                 username=settings.NEO4J_USER,
                 password=settings.NEO4J_PASSWORD
             )
-            # Fetch the schema asynchronously or on init so LLM has context
+            # Fetch the schema on init so LLM has context
             _graph.refresh_schema()
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}")
@@ -34,14 +40,22 @@ async def search_graph_db(query: str) -> str:
     Phase 3: Basic traversal search. 
     A production version would use an LLM-Cypher generator.
     """
-    graph = get_graph_store()
+    # -----------------------------------------------------------------------
+    # P2 FIX: Wrap sync Neo4j calls with asyncio.to_thread to avoid
+    # blocking the event loop on slow Neo4j operations.
+    # -----------------------------------------------------------------------
+    try:
+        graph = await asyncio.to_thread(get_graph_store)
+    except Exception:
+        return "Graph DB offline."
+
     if not graph:
         return "Graph DB offline."
         
-    # In a full setup, we would use `GraphCypherQAChain` here to generate cypher
-    # based on the query. For the baseline Enterprise setup, we simulate a fast path:
-    
-    # This is a generic return assuming the graph holds structural relationships.
-    # We will refine the GraphRAG capability with `neo4j-graphrag` later if needed.
-    schema = graph.get_schema
-    return f"[GRAPH SCHEMA INFO available for routing]\n{schema}\n*(Note: full Text-to-Cypher translation requires additional LLM call step)*"
+    # P1 FIX: Defensive schema access — get_schema is a property that
+    # can return None if refresh_schema() failed during init.
+    schema = graph.get_schema or "Schema unavailable"
+    return (
+        f"[GRAPH SCHEMA INFO available for routing]\n{schema}\n"
+        "*(Note: full Text-to-Cypher translation requires additional LLM call step)*"
+    )

@@ -4,7 +4,7 @@ Maintainer: Architect
 
 Business logic for chat orchestration:
   1. Check Semantic Router fast-path
-  2. Compile LangGraph with checkpointer
+  2. Compile LangGraph with checkpointer (cached)
   3. Stream events back as SSE
 """
 
@@ -14,7 +14,6 @@ from typing import AsyncGenerator, Dict, Any
 
 from fastapi import Request
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.ai.graph.builder import uncompiled_graph
@@ -46,18 +45,29 @@ async def try_fast_route(message: str, request: Request) -> str | None:
 
 async def get_compiled_graph(request: Request):
     """
-    Compile the LangGraph StateGraph with the appropriate checkpointer.
-    Uses AsyncPostgresSaver if DB available, else MemorySaver fallback.
-    """
-    db_pool = getattr(request.app.state, "db_pool", None)
+    Returns a compiled LangGraph StateGraph with the appropriate checkpointer.
 
-    if db_pool:
-        checkpointer = AsyncPostgresSaver(db_pool)
-        await checkpointer.setup()
-        return uncompiled_graph.compile(checkpointer=checkpointer)
+    P1 FIX: No longer calls checkpointer.setup() here — that moved to lifespan.
+    P2 FIX: Caches the compiled graph on app.state so we don't recompile every request.
+            Graph compilation is deterministic for a given checkpointer instance.
+    """
+    # Return cached graph if available
+    cached = getattr(request.app.state, "_compiled_graph", None)
+    if cached is not None:
+        return cached
+
+    # Use the pre-initialized checkpointer from lifespan, or fall back to MemorySaver
+    checkpointer = getattr(request.app.state, "checkpointer", None)
+
+    if checkpointer:
+        graph = uncompiled_graph.compile(checkpointer=checkpointer)
     else:
         logger.warning("Using MemorySaver since db_pool is unavailable.")
-        return uncompiled_graph.compile(checkpointer=MemorySaver())
+        graph = uncompiled_graph.compile(checkpointer=MemorySaver())
+
+    # Cache for subsequent requests
+    request.app.state._compiled_graph = graph
+    return graph
 
 
 async def generate_chat_stream(

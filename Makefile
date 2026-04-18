@@ -11,21 +11,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-# --- Docker ---
-up: ## Start all services
-	docker compose up -d
 
-down: ## Stop all services
-	docker compose down
-
-down-clean: ## Stop all services and remove volumes
-	docker compose down -v
-
-logs: ## Tail all service logs
-	docker compose logs -f
-
-db-only: ## Start only databases (postgres, neo4j, chroma)
-	docker compose up -d postgres neo4j chroma
 
 # --- Backend (local dev, outside Docker) ---
 backend: ## Run FastAPI locally with hot-reload
@@ -42,6 +28,4 @@ frontend-install: ## Install frontend dependencies
 	cd frontend && npm install
 
 # --- Utilities ---
-clean: ## Remove all Docker volumes and caches
-	docker compose down -v --remove-orphans
-	docker system prune -f
+clean: ## Keep for future python/node cleanup script

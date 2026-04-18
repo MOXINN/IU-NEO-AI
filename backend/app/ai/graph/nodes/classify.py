@@ -8,9 +8,20 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.ai.models.gemini import get_gemini_pro_model
 from app.ai.graph.state import AgentState
 
-# We use the non-streaming model for quick classification output in JSON format
-# Note: Google's GenAI doesn't strictly adhere to format enforcements blindly yet, so we prompt heavily
-class_llm = get_gemini_pro_model(temperature=0.0, streaming=False)
+# ---------------------------------------------------------------------------
+# P0 FIX: Lazy LLM initialization
+# Previously: class_llm = get_gemini_pro_model(...)  ← crashed at import time
+# Now: deferred to first actual use via getter
+# ---------------------------------------------------------------------------
+_class_llm = None
+
+
+def _get_class_llm():
+    global _class_llm
+    if _class_llm is None:
+        _class_llm = get_gemini_pro_model(temperature=0.0, streaming=False)
+    return _class_llm
+
 
 CLASSIFY_PROMPT = """You are an intent classification agent for a University Chatbot.
 Analyze the user's latest query and determine the best route to find an answer.
@@ -35,7 +46,7 @@ async def classify_intent_node(state: AgentState) -> AgentState:
     last_message = messages[-1].content if messages else ""
 
     prompt_text = CLASSIFY_PROMPT.format(query=last_message)
-    response = await class_llm.ainvoke(prompt_text)
+    response = await _get_class_llm().ainvoke([HumanMessage(content=prompt_text)])
     
     # Simple parse - assuming the LLM obeys JSON formatting
     # In production, use langchain's OutputParser with retry logic

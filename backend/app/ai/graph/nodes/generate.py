@@ -7,8 +7,19 @@ from langchain_core.messages import SystemMessage
 from app.ai.models.gemini import get_gemini_pro_model
 from app.ai.graph.state import AgentState
 
-# Must be streaming=True for astream_events to work dynamically token by token
-stream_llm = get_gemini_pro_model(temperature=0.2, streaming=True)
+# ---------------------------------------------------------------------------
+# P0 FIX: Lazy LLM initialization
+# Previously: stream_llm = get_gemini_pro_model(...)  ← crashed at import time
+# Now: deferred to first actual use via getter
+# ---------------------------------------------------------------------------
+_stream_llm = None
+
+
+def _get_stream_llm():
+    global _stream_llm
+    if _stream_llm is None:
+        _stream_llm = get_gemini_pro_model(temperature=0.2, streaming=True)
+    return _stream_llm
 
 GENERATE_SYSTEM_PROMPT = """You are the official AI Assistant for Integral University.
 You are professional, concise, and highly accurate.
@@ -40,7 +51,7 @@ async def generate_node(state: AgentState) -> AgentState:
     
     # The astream_events engine requires us to invoke it, but inside a node
     # returning an ainvoke result will yield correctly to the graph stream.
-    response = await stream_llm.ainvoke(messages_for_llm)
+    response = await _get_stream_llm().ainvoke(messages_for_llm)
     
     # We return the response as an AIMessage to append to the state's message list.
     return {"messages": [response]}

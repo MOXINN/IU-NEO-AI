@@ -10,7 +10,7 @@ echo =============================
 echo.
 
 echo [1/2] Starting Backend (FastAPI on :8080)...
-start "IU-Backend" cmd /k "cd /d %~dp0backend && python -m uvicorn main:app --host 0.0.0.0 --port 8080 --reload"
+start "IU-Backend" cmd /k "cd /d %~dp0backend && python run.py"
 
 echo [2/2] Starting Frontend (Next.js on :3000)...
 start "IU-Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"

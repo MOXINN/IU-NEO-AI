@@ -42,7 +42,7 @@ neo4j>=5.27.0
 langchain-neo4j>=0.3.0
 
 # --- Semantic Router: Fast Intent Classification ---
-semantic-router>=0.1.0
+semantic-router[fastembed]>=0.1.0
 
 # --- Utilities ---
 tenacity>=9.0.0

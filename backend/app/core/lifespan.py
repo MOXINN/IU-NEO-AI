@@ -30,11 +30,20 @@ async def lifespan(app: FastAPI):
     try:
         db_pool = await init_db_pool()
         app.state.db_pool = db_pool
-        logger.info("✓ PostgreSQL connected")
+
+        # P1 FIX: Create and setup checkpointer ONCE at startup,
+        # not on every chat request (was causing per-request DDL).
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        checkpointer = AsyncPostgresSaver(db_pool)
+        await checkpointer.setup()
+        app.state.checkpointer = checkpointer
+
+        logger.info("✓ PostgreSQL connected + checkpointer ready")
     except Exception as e:
         logger.warning(f"✗ PostgreSQL unavailable: {e}")
         logger.warning("  Continuing without persistence (in-memory mode)")
         app.state.db_pool = None
+        app.state.checkpointer = None
 
     # --- 2. ChromaDB (Vector Store) ---
     try:

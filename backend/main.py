@@ -8,6 +8,18 @@ The single entry point. Clean app factory that delegates to:
   - app.api.routes.*      → route registration
 """
 
+# ---------------------------------------------------------------------------
+# P0 FIX: Windows Event Loop Policy
+# psycopg v3 (async) requires SelectorEventLoop on Windows.
+# Uvicorn defaults to ProactorEventLoop which is incompatible with libpq.
+# This MUST run before any async import touches the loop.
+# ---------------------------------------------------------------------------
+import sys
+import asyncio
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
