@@ -54,16 +54,20 @@ export async function streamChat(
       },
 
       onmessage(msg) {
+        console.debug(`SSE Event: ${msg.event}`, msg.data);
         if (msg.event === "message") {
-          store.updateLastMessage(msg.data);
-          store.setStatusMessage(null);
+          if (msg.data) {
+            store.updateLastMessage(msg.data);
+            store.setStatusMessage(null);
+          }
         } else if (msg.event === "status") {
           store.setStatusMessage(msg.data);
         } else if (msg.event === "done") {
+          console.log("Stream finished normally.");
           store.setStreaming(false);
           store.setStatusMessage(null);
         } else if (msg.event === "error") {
-          console.error("Server stream error:", msg.data);
+          console.error("Server-side stream error:", msg.data);
           toast.error(`AI Error: ${msg.data}`);
           store.setStatusMessage(null);
           store.setStreaming(false);

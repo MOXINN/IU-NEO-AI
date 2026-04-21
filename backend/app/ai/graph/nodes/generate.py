@@ -9,8 +9,6 @@ from app.ai.graph.state import AgentState
 
 # ---------------------------------------------------------------------------
 # P0 FIX: Lazy LLM initialization
-# Previously: stream_llm = get_gemini_pro_model(...)  ← crashed at import time
-# Now: deferred to first actual use via getter
 # ---------------------------------------------------------------------------
 _stream_llm = None
 
@@ -22,11 +20,14 @@ def _get_stream_llm():
     return _stream_llm
 
 GENERATE_SYSTEM_PROMPT = """You are the official AI Assistant for Integral University.
-You are professional, concise, and highly accurate.
-You must use the provided context below to answer the user's question.
-If the answer is not in the context, do not make it up—simply state you do not have the information.
+You are a helpful, proactive university peer.
 
-Search Method Used: {search_type}
+INSTRUCTIONS:
+1. Priority: Use the [RETRIEVED CONTEXT] provided below to answer the user's question accurately.
+2. Flexibility: If the information is not explicitly in the context but relates to general university knowledge (e.g., Integral University is in Lucknow, its reputation, standard campus protocols like IUET), you MUST provide a helpful response based on your internal knowledge.
+3. Disclaimer: If you use internal knowledge not found in the context, clearly state that this is general information and suggest the user verify it with the official university website or admissions office.
+4. Transparency: Always cite the source if it comes from the provided context (e.g., "[Source: Document]").
+5. Search Mode: You are currently using the {search_type} search method.
 
 --- RETRIEVED CONTEXT ---
 {context}

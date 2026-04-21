@@ -10,7 +10,7 @@ The router initialization downloads a small ONNX model on first run.
 All failures are caught gracefully — if the router breaks, queries
 simply fall through to the full LangGraph pipeline.
 """
-
+import asyncio
 import logging
 from semantic_router import Route, SemanticRouter
 from semantic_router.encoders import FastEmbedEncoder
@@ -20,54 +20,67 @@ logger = logging.getLogger("iu-nweo.routing")
 # Define routes for instant matching
 greeting = Route(
     name="greeting",
-    utterances=["hello", "hi", "hey", "good morning", "how are you"]
+    utterances=[
+        "hello", "hi", "hey", "good morning", "how are you",
+        "yo", "greeting", "hello ai", "hey there"
+    ]
 )
 
 faq_admission = Route(
     name="faq_admission",
     utterances=[
         "how to apply", "when do admissions start",
-        "admission process", "how to get into university"
+        "admission process", "how to get into university",
+        "tell me about admission", "i want to apply", 
+        "application procedure", "admission details",
+        "how to take admission", "entrance exam for admission"
     ]
 )
 
-# Shared router instance
+_router_lock = asyncio.Lock()
+# ADDED THESE TWO LINES TO FIX THE NAMERROR
 _router = None
 _init_failed = False
 
-
-def get_route_layer() -> SemanticRouter | None:
+async def get_route_layer() -> SemanticRouter | None:
     """
     Initializes and returns the semantic router.
-    Returns None if initialization has previously failed to avoid repeated errors.
+    Returns None if initialization has previously failed.
+    Thread-safe and async-safe.
     """
     global _router, _init_failed
-
+    
     if _init_failed:
         return None
 
     if _router is None:
-        try:
-            logger.info("Initializing FastEmbed encoder for Semantic Router...")
-            encoder = FastEmbedEncoder()
-            _router = SemanticRouter(encoder=encoder, routes=[greeting, faq_admission])
-            logger.info("Semantic Router ready.")
-        except Exception as e:
-            logger.error(f"Semantic Router initialization failed: {e}")
-            _init_failed = True
-            return None
+        async with _router_lock:
+            # Double-check pattern
+            if _router is not None:
+                return _router
+                
+            try:
+                logger.info("Initializing FastEmbed encoder for Semantic Router...")
+                # Run blocking init in a thread to avoid blocking the event loop
+                encoder = await asyncio.to_thread(FastEmbedEncoder)
+                _router = SemanticRouter(encoder=encoder, routes=[greeting, faq_admission])
+                logger.info("Semantic Router ready.")
+            except Exception as e:
+                logger.error(f"Semantic Router initialization failed: {e}")
+                _init_failed = True
+                return None
 
     return _router
 
 
-def check_fast_route(query: str) -> str | None:
+async def check_fast_route(query: str) -> str | None:
     """
     Evaluates the query against Semantic Router.
     Returns route name if matched, otherwise None.
     Returns None on any error (non-blocking).
     """
     try:
-        router = get_route_layer()
+        router = await get_route_layer()
         if router is None:
             return None
         route_choice = router(query)

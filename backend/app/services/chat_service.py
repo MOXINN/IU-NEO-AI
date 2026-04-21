@@ -21,6 +21,7 @@ from app.ai.routing.semantic_router import check_fast_route, CANNED_RESPONSES
 
 logger = logging.getLogger("iu-nweo.services.chat")
 
+canned_router_lock = asyncio.Lock()
 
 async def try_fast_route(message: str, request: Request) -> str | None:
     """
@@ -33,7 +34,8 @@ async def try_fast_route(message: str, request: Request) -> str | None:
         return None
 
     try:
-        route_name = check_fast_route(message)
+        async with canned_router_lock:
+            route_name = await check_fast_route(message)
         if route_name and route_name in CANNED_RESPONSES:
             logger.info(f"Semantic Router match: {route_name}. Bypassing LLM.")
             return CANNED_RESPONSES[route_name]
@@ -88,8 +90,11 @@ async def generate_chat_stream(
         yield {"event": "done", "data": "[DONE]"}
         return
 
-    # --- Full Path: LangGraph ---
     try:
+        # 1. Start the stream with a confirmation event
+        yield {"event": "status", "data": "Establishing connection..."}
+        await asyncio.sleep(0.01) # Flush
+
         graph = await get_compiled_graph(request)
     except Exception as e:
         logger.error(f"Graph compilation failed: {e}", exc_info=True)
@@ -100,6 +105,7 @@ async def generate_chat_stream(
     input_data = {"messages": [HumanMessage(content=user_message)]}
 
     try:
+        logger.info(f"Starting LangGraph stream for thread {thread_id}...")
         async for event in graph.astream_events(input_data, config=config, version="v2"):
             if await request.is_disconnected():
                 logger.info(f"Client disconnected for thread {thread_id}")
@@ -107,30 +113,55 @@ async def generate_chat_stream(
 
             kind = event["event"]
             node = event.get("metadata", {}).get("langgraph_node", "unknown")
+            
+            # Log all significant events for debugging
+            if kind.startswith("on_chat_model") or kind.startswith("on_node"):
+                logger.debug(f"Graph Event: {kind} | Node: {node}")
 
             # --- Stream LLM Tokens ---
             if kind == "on_chat_model_stream":
-                content = event["data"]["chunk"].content
-                if content:
-                    yield {"event": "message", "data": content}
-                    await asyncio.sleep(0.01)
+                data = event.get("data", {})
+                chunk = data.get("chunk")
+                if chunk:
+                    # Robust content extraction
+                    content = ""
+                    if hasattr(chunk, "content"):
+                        content = chunk.content
+                    elif isinstance(chunk, dict):
+                        content = chunk.get("content", "")
+                    
+                    if content:
+                        yield {"event": "message", "data": content}
 
             # --- Stream Node Transitions (Status Updates) ---
             elif kind == "on_node_start":
                 status_map = {
-                    "classify": "Classifying query...",
-                    "vector_search": "Searching academic records...",
-                    "graph_search": "Exploring prerequisites graph...",
-                    "fallback_handler": "Falling back to safe defaults...",
-                    "generate_response": "Generating response...",
+                    "classify": "Analyzing your intent...",
+                    "vector_search": "Searching university knowledge base...",
+                    "graph_search": "Analyzing course relationships...",
+                    "fallback_handler": "Redirecting to general knowledge...",
+                    "generate_response": "Formulating final answer...",
                 }
                 status_msg = status_map.get(node)
                 if status_msg:
+                    logger.info(f"Node Started: {node}")
                     yield {"event": "status", "data": status_msg}
 
+            # --- Capture Final Result from non-streaming nodes ---
+            elif kind == "on_node_end":
+                if node in ["fallback_handler", "generate_response"]:
+                    output = event["data"].get("output")
+                    if output and "messages" in output:
+                        last_msg = output["messages"][-1]
+                        # Only yield if content is present and was not streamed
+                        # For terminal nodes that don't stream (like fallback), we send the whole thing.
+                        if node == "fallback_handler" and hasattr(last_msg, "content"):
+                            yield {"event": "message", "data": last_msg.content}
+
         # Send completion signal
+        logger.info(f"Stream completed for thread {thread_id}")
         yield {"event": "done", "data": "[DONE]"}
 
     except Exception as e:
-        logger.error(f"Streaming error: {e}", exc_info=True)
-        yield {"event": "error", "data": str(e)}
+        logger.error(f"Streaming loop error: {e}", exc_info=True)
+        yield {"event": "error", "data": f"Execution error in node '{node}': {str(e)}"}

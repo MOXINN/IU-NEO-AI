@@ -24,7 +24,7 @@ def get_chroma_client() -> chromadb.HttpClient:
 
 def get_embeddings() -> GoogleGenerativeAIEmbeddings:
     return GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
+        model="models/gemini-embedding-001",  # <--- THE FINAL FIX
         google_api_key=settings.GEMINI_API_KEY
     )
 
@@ -54,7 +54,7 @@ async def search_vector_db(query: str, top_k: int = 3) -> str:
     docs = await store.asimilarity_search(query, k=top_k)
     
     if not docs:
-        return "No relevant university documents found in vector storage."
+        return "[SYSTEM: No specific documents found for this query in the knowledge base. Please rely on general university knowledge if applicable.]"
         
     context = "\n---\n".join([d.page_content for d in docs])
     return f"[VECTOR RAG RESULTS]\n{context}"

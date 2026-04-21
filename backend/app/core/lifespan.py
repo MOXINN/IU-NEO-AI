@@ -6,7 +6,7 @@ Manages all external service connections during startup/shutdown.
 Each service init is independent — failures are logged and the app
 continues in degraded mode rather than crashing.
 """
-
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.core.config import settings
@@ -73,15 +73,21 @@ async def lifespan(app: FastAPI):
         app.state.neo4j_available = False
 
     # --- 4. Semantic Router (FastEmbed) ---
-    try:
-        from app.ai.routing.semantic_router import get_route_layer
-        get_route_layer()  # Pre-warm the encoder + routes
-        app.state.semantic_router_available = True
-        logger.info("✓ Semantic Router initialized")
-    except Exception as e:
-        logger.warning(f"✗ Semantic Router init failed: {e}")
-        logger.warning("  Fast-path routing disabled, all queries go through LangGraph")
-        app.state.semantic_router_available = False
+    # We do NOT await this, as it can block for minutes downloading models
+    # Instead, we trigger it in the background so the app can start serving
+    # other requests immediately.
+    async def prewarm_router():
+        try:
+            from app.ai.routing.semantic_router import get_route_layer
+            await get_route_layer()
+            app.state.semantic_router_available = True
+            logger.info("✓ Semantic Router background init complete")
+        except Exception as e:
+            logger.warning(f"✗ Semantic Router background init failed: {e}")
+            app.state.semantic_router_available = False
+
+    asyncio.create_task(prewarm_router())
+    logger.info("ℹ Semantic Router initialization started in background")
 
     logger.info("=" * 60)
     logger.info("IU NWEO AI — Ready to serve")
